@@ -1,23 +1,24 @@
 #include <Arduino.h>
 #include "Settings.h"
 
+const uint8_t SD3 = 10;
+
+#include <Wire.h> // I2C (Temperature)
+#include <SPI.h> // SPI (Display, Touch, RFID)
+
 
 // Display
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ILI9341.h> // Hardware-specific library
-#include <Wire.h>  // required even though we do not use I2C 
-#include <SPI.h>
 #include <XPT2046_Touchscreen.h>
 #include "GfxUi.h" // Additional UI functions
 
-static uint8_t SD3 = 10;
 #define TFT_CS SD3
 #define TFT_DC D4
-#define BL_LED D8
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
 GfxUi ui = GfxUi(&tft);
 
-#define SPK_PIN D1
+#define SPK_PIN D8
 
 // Fonts
 #include "ArialRoundedMTBold_14.h"
@@ -34,7 +35,6 @@ GfxUi ui = GfxUi(&tft);
 
 // Touchscreen
 #define TOUCH_CS_PIN D3
-#define TOUCH_IRQ_PIN D2
 #define TS_MINX 323
 #define TS_MINY 195
 #define TS_MAXX 3947
@@ -44,16 +44,12 @@ XPT2046_Touchscreen ts(TOUCH_CS_PIN);
 
 
 // RFID
-//#include <SPI.h>  // Included
 #include <MFRC522.h>
-#define RST_PIN D0
-#define SS_PIN D4
-MFRC522 mfrc522(SS_PIN, RST_PIN);
+#define SS_PIN D0
+MFRC522 mfrc522(SS_PIN, -1);
 
 void ScreenSetup() {
-    pinMode(BL_LED, OUTPUT); // BackLight
-    digitalWrite(BL_LED, HIGH); // Backlight on
-
+    
     pinMode(SPK_PIN,OUTPUT); // Speaker
 
     if (!ts.begin()) {
@@ -110,13 +106,13 @@ void setup() {
     Serial.begin(115200);
 
     ScreenSetup();
-    RFIDSetup();
     WifiSetup();
+    RFIDSetup();
 }
 
 bool regMode = false;
 
-String cardUID = "XXXX";
+String cardUID = "";
 int lastTitle = 0;
 int titleTimeout = 1;
 
@@ -124,16 +120,20 @@ double bodyTemp = 32.5;
 int lastTemp = millis();
 
 
+void DrawTitle(String title, int color) {
+    tft.fillRoundRect(0, 0, 320, 65, 0, ILI9341_BLACK);
+    tft.setFont(&DejaVu_Sans_35);
+    tft.setCursor(18,100);
+    ui.setTextColor(color, ILI9341_BLACK);
+    ui.drawString(160, 45, title);
+}
+
 void UpdateMeasureScreen() {
 
     if (titleTimeout && millis() - lastTitle > 1000 * titleTimeout) {
         titleTimeout = 0;
         cardUID = "";
-        tft.fillRoundRect(0, 0, 320, 65, 0, ILI9341_BLACK);
-        tft.setFont(&DejaVu_Sans_35);
-        tft.setCursor(18,100);
-        ui.setTextColor(ILI9341_ORANGE, ILI9341_BLACK);
-        ui.drawString(160, 45, "Tap Your Card...");
+        DrawTitle(TAP_CARD_PROMPT, ILI9341_ORANGE);
     }
     
 }
@@ -145,7 +145,8 @@ void ScanCard() {
         byte idSize = mfrc522.uid.size;
         String newCardUID = "";
         for (byte i = 0; i < idSize; i++) {
-            if (mfrc522.uid.uidByte[i] < 0x10) newCardUID += "0";
+            if (mfrc522.uid.uidByte[i] < 0x10)
+                newCardUID += "0";
             newCardUID += String(mfrc522.uid.uidByte[i], HEX);
         }
         Serial.println(newCardUID);
@@ -154,18 +155,15 @@ void ScanCard() {
             cardUID = newCardUID;
             lastTitle = millis();
             titleTimeout = CARD_STAY_SEC;
-            tft.fillRoundRect(0, 0, 320, 65, 0, ILI9341_BLACK);
-            tft.setFont(&DejaVu_Sans_35);
-            tft.setCursor(18,100);
-            ui.setTextColor(ILI9341_GREEN, ILI9341_BLACK);
-            ui.drawString(160, 45, cardUID);
+            DrawTitle(cardUID, ILI9341_GREEN);
 
-            tone(SPK_PIN, 1488, 100);
+            if (CARD_BEEP_FREQUENCY)
+                tone(SPK_PIN, CARD_BEEP_FREQUENCY, CARD_BEEP_MS);
         }
     }
 }
 
-void ScanTemperature() {
+void MeasureTemperature() {
     
 }
 
@@ -179,5 +177,6 @@ void loop() {
     } else {
         UpdateMeasureScreen();
         ScanCard();
+        MeasureTemperature();
     }
 }
