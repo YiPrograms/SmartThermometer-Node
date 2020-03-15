@@ -25,7 +25,7 @@ GfxUi ui = GfxUi(&tft);
 #include "DejaVu_Sans_35.h"
 #include "DejaVu_Sans_Bold_12.h"
 #include "DejaVu_Sans_Bold_23.h"
-#include "Lato_Regular_80.h"
+#include "Lato_Regular_160.h"
 
 
 // WifiManager
@@ -52,6 +52,7 @@ MFRC522 mfrc522(SS_PIN, -1);
 
 
 // Temperature
+#define PROX_IRQ D3
 #include <Adafruit_MLX90614.h>
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
@@ -79,16 +80,19 @@ void RFIDSetup() {
 
 
 volatile bool promixity = false;
+volatile bool measuring = false;
+volatile bool premeasuring = false;
 
-ICACHE_RAM_ATTR void MeasureTemperature() {
-    promixity = true;
+ICACHE_RAM_ATTR void PromixityInterrupt() {
+    if (!measuring && !premeasuring)
+        promixity = true;
 }
 
 void TemperatureSetup() {
     mlx.begin();
 
-    pinMode(D3, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(D3), MeasureTemperature, FALLING);
+    pinMode(PROX_IRQ, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(PROX_IRQ), PromixityInterrupt, FALLING);
 }
 
 // Called if WiFi has not been configured yet
@@ -137,17 +141,35 @@ void setup() {
 
 bool regMode = false;
 
+bool initial = true;
+
+
+int lastTrigger = 0;
+
+
 String cardUID = "";
-int lastTitle = 0;
-int titleTimeout = -1;
+int lastCard = 0;
+
+String lastTitle = "";
+
+int measureTime = 0;
+double measureSum = 0;
+int measureCount = 0;
+int measureRetries = 0;
+
+double measureMax = -1;
+double measureMin = 1e6;
 
 double bodyTemp = 0;
 int lastBodyTemp = 0;
 
 String roomTemp = "";
-int lastRoomTemp = -ROOM_TEMP_UPDATE_SEC;
+int lastRoomTemp = 0;
 
 void DrawTitle(String title, int color) {
+    if (lastTitle == title) return;
+    lastTitle = title;
+
     tft.fillRoundRect(0, 0, 320, 65, 0, ILI9341_BLACK);
     tft.setFont(&DejaVu_Sans_35);
     ui.setTextColor(color, ILI9341_BLACK);
@@ -155,10 +177,10 @@ void DrawTitle(String title, int color) {
 }
 
 void DrawTemperature(String text, int color) {
-    tft.fillRoundRect(0, 65, 320, 100, 0, ILI9341_ORANGE);
-    tft.setFont(&Lato_Regular_80);
+    tft.fillRoundRect(0, 70, 320, 125, 0, ILI9341_BLACK);
+    tft.setFont(&Lato_Regular_160);
     ui.setTextColor(color, ILI9341_BLACK);
-    ui.drawString(160, 105, text);
+    ui.drawString(154, 188, text);
 }
 
 void DrawRoomTemperature(bool init) {
@@ -176,43 +198,138 @@ void DrawRoomTemperature(bool init) {
     ui.drawString(125, 235, roomTemp);
 }
 
-void UpdateMeasure() {
-    if (titleTimeout && int(millis()) - lastTitle > 1000 * titleTimeout) {
-        titleTimeout = 0;
-        cardUID = "";
-        DrawTitle(TAP_CARD_PROMPT, ILI9341_ORANGE);
-    }
 
-    if (promixity) {
+void MeasureBodyTemp() {
+    //Serial.print("Object Temp: ");
+    //Serial.println(mlx.readObjectTempC());
+
+    if (promixity) {                                                    // Start premeasuring
         promixity = false;
-        bodyTemp = mlx.readObjectTempC();
-        DrawTemperature(String(bodyTemp, 1), ILI9341_GREEN);
-        lastBodyTemp = millis();
+        if (int(millis()) - lastBodyTemp > BODY_TEMP_INTERVAL_MS) {
+            premeasuring = true;
+            lastTrigger = millis();
+        }
     }
 
-    if (int(millis()) - lastBodyTemp > 1000 * BODY_TEMP_STAY_SEC) {
+    if (premeasuring) {
+        if (digitalRead(PROX_IRQ) == HIGH) {                              // The person has left
+            premeasuring = false;
+        } else if (int(millis()) - lastTrigger > BODY_TEMP_WAIT_MS) {   // Start measuring
+            premeasuring = false;
+            measuring = true;
+            measureTime = millis();
+            
+            if (lastBodyTemp) {
+                lastBodyTemp = 0;
+                DrawTemperature("", ILI9341_BLACK);
+            }
+            
+            tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_START_BEEP_MS);
+            DrawTitle(MEASURING_PROMPT, 0x04FF);
+            
+            measureSum = 0;
+            measureCount = 0;
+            measureMax = -1;
+            measureMin = 1e6;
+            measureRetries = 0;
+        }
+    }
+
+    if (measuring) {    // Measure body temperature
+        int measurePass = int(millis()) - measureTime;
+        
+        if (measurePass > BODY_TEMP_MEASURE_BEGIN_MS) {
+            double measureResult = mlx.readObjectTempC();
+            measureMax = max(measureMax, measureResult);
+            measureMin = min(measureMin, measureResult);
+    
+            if (measureMax - measureMin > 0.8) {                                  // Remeasure
+                measureSum = 0;
+                measureCount = 0;
+                measureMax = -1;
+                measureMin = 1e6;
+                
+                if (measureRetries > BODY_TEMP_MAX_REMEASURE_TIMES) {            // Measure Failed
+                    measuring = false;
+                    lastBodyTemp = millis();
+                    DrawTitle(MEASURE_FAILED_PROMPT, ILI9341_RED);
+                    tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS*2);
+                } else {
+                    measureTime = millis() + BODY_TEMP_MEASURE_BEGIN_MS;
+                    measureRetries++;
+                }
+            } else {
+                measureSum += measureResult;
+                measureCount++;
+
+                if (measurePass > BODY_TEMP_MEASURE_END_MS) {
+                    if (measureCount < BODY_TEMP_MIN_SAMPLES)                                      // Too few samples
+                        measureTime += BODY_TEMP_MEASURE_BEGIN_MS;
+                    else {                                                     
+                        bodyTemp = measureSum / measureCount;
+                        
+                        if (digitalRead(PROX_IRQ)==HIGH) {                                         // The person left
+                            measuring = false;
+                            lastBodyTemp = millis();
+                            DrawTitle(MEASURE_LEAVE_PROMPT, ILI9341_RED);
+                            tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS*2);
+                        } else {                                                                    // Measure Sucess
+                            int color = 0;
+    
+                            if (bodyTemp < 35.8) color = 0x04FF;
+                            else if (bodyTemp < 37) color = 0x07FF;
+                            else if (bodyTemp < 37.25) color = ILI9341_YELLOW;
+                            else if (bodyTemp < 37.5) color = ILI9341_ORANGE;
+                            else color = ILI9341_RED;
+                            
+                            DrawTemperature(String(bodyTemp, 1), color);
+                            lastBodyTemp = millis();
+                            tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS);
+        
+                            if (cardUID != "") {                                         // Upload result
+                                DrawTitle("Sending as " + cardUID + "...", 0x04FF);
+                                delay(1000);
+                                DrawTitle("Sent as " + cardUID + "!", ILI9341_GREEN);
+                                cardUID = "";
+                            } else {
+                                DrawTitle(TAP_CARD_PROMPT, ILI9341_ORANGE);
+                            }
+        
+                            measuring = false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!measuring && lastBodyTemp && int(millis()) - lastBodyTemp > 1000 * BODY_TEMP_STAY_SEC) {
+        lastBodyTemp = 0;
         DrawTemperature("", ILI9341_BLACK);
+        if (cardUID == "")
+            DrawTitle(TAP_CARD_PROMPT, ILI9341_ORANGE);
     }
+}
 
+void UpdateRoomTemp() {
+    if (initial) {
+        roomTemp = String(mlx.readAmbientTempC(), 1);
+        DrawRoomTemperature(true);
+        lastRoomTemp = millis();
+    }
     if (int(millis()) - lastRoomTemp > 1000 * ROOM_TEMP_UPDATE_SEC) {
         String newTemp = String(mlx.readAmbientTempC(), 1);
         
         if (roomTemp != newTemp) {
             roomTemp = newTemp;
-            
-            if (lastRoomTemp < 0)
-                DrawRoomTemperature(true);
-            else
-                DrawRoomTemperature(false);
-            
+            DrawRoomTemperature(false);
             lastRoomTemp = millis();
         }
     }
-    
 }
 
 void ScanCard() {
-    if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+    if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) { // Scan card
         Serial.print("Card approach: ");
         byte *id = mfrc522.uid.uidByte;
         byte idSize = mfrc522.uid.size;
@@ -226,14 +343,20 @@ void ScanCard() {
         Serial.println(newCardUID);
 
         if (newCardUID != cardUID) {
-            cardUID = newCardUID;
-            lastTitle = millis();
-            titleTimeout = CARD_STAY_SEC;
-            DrawTitle(cardUID, ILI9341_GREEN);
-
-            if (CARD_BEEP_FREQUENCY)
-                tone(SPK_PIN, CARD_BEEP_FREQUENCY, CARD_BEEP_MS);
+            if (!measuring || measuring && cardUID == "") {
+                cardUID = newCardUID;
+                lastCard = millis();
+                DrawTitle(cardUID, ILI9341_GREEN);
+                
+                tone(SPK_PIN, BEEP_FREQUENCY, CARD_BEEP_MS);
+                delay(5000);
+            }
         }
+    }
+
+    if (initial || !measuring && cardUID != "" && int(millis()) - lastCard > 1000 * CARD_TIMEOUT_SEC) {   // Card Timeout
+        cardUID = "";
+        DrawTitle(TAP_CARD_PROMPT, ILI9341_ORANGE);
     }
 }
 
@@ -243,9 +366,13 @@ void RegScreen() {
 
 void loop() {
     if (regMode) {
-        
+
+
+        initial = false;
     } else {
+        MeasureBodyTemp();
         ScanCard();
-        UpdateMeasure();
+        UpdateRoomTemp();
+        initial = false;
     }
 }

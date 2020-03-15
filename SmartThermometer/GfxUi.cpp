@@ -40,9 +40,9 @@ void GfxUi::drawString(int x, int y, char *text) {
       x1 = x - w;
       break;
   }
-  if (_textColor != _backgroundColor) {
-    _tft->fillRect(x1, y - h -1, w + 1, h + 1, _backgroundColor);
-  }
+  //if (_textColor != _backgroundColor) {
+  //  _tft->fillRect(x1, y - h -1, w + 1, h + 1, _backgroundColor);
+  //}
   _tft->setCursor(x1, y);
   _tft->print(text);
 }
