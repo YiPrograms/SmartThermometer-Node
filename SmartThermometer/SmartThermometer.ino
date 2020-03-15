@@ -25,7 +25,7 @@ GfxUi ui = GfxUi(&tft);
 #include "DejaVu_Sans_35.h"
 #include "DejaVu_Sans_Bold_12.h"
 #include "DejaVu_Sans_Bold_23.h"
-#include "TomThumb.h"
+#include "Lato_Regular_80.h"
 
 
 // WifiManager
@@ -77,8 +77,11 @@ void RFIDSetup() {
     mfrc522.PCD_DumpVersionToSerial();
 }
 
+
+volatile bool promixity = false;
+
 ICACHE_RAM_ATTR void MeasureTemperature() {
-    tone(SPK_PIN, CARD_BEEP_FREQUENCY);
+    promixity = true;
 }
 
 void TemperatureSetup() {
@@ -132,18 +135,17 @@ void setup() {
 }
 
 
-
 bool regMode = false;
 
 String cardUID = "";
 int lastTitle = 0;
-int titleTimeout = 1;
+int titleTimeout = -1;
 
-volatile double bodyTemp = 0;
-volatile int lastBodyTemp = 0;
+double bodyTemp = 0;
+int lastBodyTemp = 0;
 
 String roomTemp = "";
-int lastRoomTemp = -1000;
+int lastRoomTemp = -ROOM_TEMP_UPDATE_SEC;
 
 void DrawTitle(String title, int color) {
     tft.fillRoundRect(0, 0, 320, 65, 0, ILI9341_BLACK);
@@ -152,38 +154,59 @@ void DrawTitle(String title, int color) {
     ui.drawString(160, 45, title);
 }
 
+void DrawTemperature(String text, int color) {
+    tft.fillRoundRect(0, 65, 320, 100, 0, ILI9341_ORANGE);
+    tft.setFont(&Lato_Regular_80);
+    ui.setTextColor(color, ILI9341_BLACK);
+    ui.drawString(160, 105, text);
+}
+
 void DrawRoomTemperature(bool init) {
     ui.setTextColor(ILI9341_YELLOW, ILI9341_BLACK);
+    
     if (init) {
         tft.setFont(&DejaVu_Sans_Bold_23);
         ui.drawString(95, 235, "Room:         C");
         tft.setFont(&DejaVu_Sans_Bold_12);
         ui.drawString(167, 225, "o");
     }
-    String newTemp = String(mlx.readAmbientTempC(), 1);
-    if (roomTemp != newTemp) {
-        roomTemp = newTemp;
-        tft.setFont(&DejaVu_Sans_Bold_23);
-        tft.fillRoundRect(95, 215, 62, 22, 0, ILI9341_BLACK);
-        ui.drawString(125, 235, roomTemp);
-    }
+    
+    tft.setFont(&DejaVu_Sans_Bold_23);
+    tft.fillRoundRect(95, 215, 62, 22, 0, ILI9341_BLACK);
+    ui.drawString(125, 235, roomTemp);
 }
 
-void UpdateMeasureScreen() {
-
-    if (titleTimeout && millis() - lastTitle > 1000 * titleTimeout) {
+void UpdateMeasure() {
+    if (titleTimeout && int(millis()) - lastTitle > 1000 * titleTimeout) {
         titleTimeout = 0;
         cardUID = "";
         DrawTitle(TAP_CARD_PROMPT, ILI9341_ORANGE);
     }
 
-    if (millis() - lastRoomTemp > 1000 * ROOM_TEMP_UPDATE_SEC) {
-        if (lastRoomTemp == -1000) {
-            DrawRoomTemperature(true);
-        } else {
-            DrawRoomTemperature(false);
+    if (promixity) {
+        promixity = false;
+        bodyTemp = mlx.readObjectTempC();
+        DrawTemperature(String(bodyTemp, 1), ILI9341_GREEN);
+        lastBodyTemp = millis();
+    }
+
+    if (int(millis()) - lastBodyTemp > 1000 * BODY_TEMP_STAY_SEC) {
+        DrawTemperature("", ILI9341_BLACK);
+    }
+
+    if (int(millis()) - lastRoomTemp > 1000 * ROOM_TEMP_UPDATE_SEC) {
+        String newTemp = String(mlx.readAmbientTempC(), 1);
+        
+        if (roomTemp != newTemp) {
+            roomTemp = newTemp;
+            
+            if (lastRoomTemp < 0)
+                DrawRoomTemperature(true);
+            else
+                DrawRoomTemperature(false);
+            
+            lastRoomTemp = millis();
         }
-        lastRoomTemp = millis();
     }
     
 }
@@ -197,6 +220,7 @@ void ScanCard() {
         for (byte i = 0; i < idSize; i++) {
             if (mfrc522.uid.uidByte[i] < 0x10)
                 newCardUID += "0";
+             
             newCardUID += String(mfrc522.uid.uidByte[i], HEX);
         }
         Serial.println(newCardUID);
@@ -221,7 +245,7 @@ void loop() {
     if (regMode) {
         
     } else {
-        UpdateMeasureScreen();
         ScanCard();
+        UpdateMeasure();
     }
 }
