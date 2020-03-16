@@ -11,12 +11,12 @@ const int BODY_TEMP_MEASURE_STOP_BEEP_MS = 600;
 // [TRIGGER!] <- WAIT_MS -> [Start measuring] <- MEASURE_BEGIN_MS -> [          Sampling.....       ]  [Done measuring]
 //                                            <-                 MEASURE_END_MS                    -> 
 const int BODY_TEMP_WAIT_MS = 700; // How long the person have to stay before the measure starts to prevent false trigger
-const int BODY_TEMP_MEASURE_BEGIN_MS = 700;
-const int BODY_TEMP_MEASURE_END_MS = 1300;
+const int BODY_TEMP_MEASURE_BEGIN_MS = 0;
+const int BODY_TEMP_MEASURE_END_MS = 700;
 const int BODY_TEMP_MIN_SAMPLES = 5;  // Keep sampling if there are too few samples
 
-const double BODY_TEMP_REMEASURE_THEREHOLD_C = 0.15; // if MAX - MIN > Therehold then remeasue
-const int BODY_TEMP_MAX_REMEASURE_TIMES = 5;
+const double BODY_TEMP_REMEASURE_THEREHOLD_C = 0.3; // if MAX - MIN > Therehold then remeasue
+const int BODY_TEMP_MAX_REMEASURE_TIMES = 7;
 
 const int BODY_TEMP_INTERVAL_MS = 1500;
 const int BODY_TEMP_STAY_SEC = 5;

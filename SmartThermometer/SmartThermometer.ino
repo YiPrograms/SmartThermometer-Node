@@ -212,9 +212,9 @@ void MeasureBodyTemp() {
     }
 
     if (premeasuring) {
-        if (digitalRead(PROX_IRQ) == HIGH) {                              // The person has left
+        if (digitalRead(PROX_IRQ) == HIGH) {                                 // The person has left
             premeasuring = false;
-        } else if (int(millis()) - lastTrigger > BODY_TEMP_WAIT_MS) {   // Start measuring
+        } else if (int(millis()) - lastTrigger > BODY_TEMP_WAIT_MS) {        // Start measuring
             premeasuring = false;
             measuring = true;
             measureTime = millis();
@@ -226,7 +226,7 @@ void MeasureBodyTemp() {
             
             tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_START_BEEP_MS);
             DrawTitle(MEASURING_PROMPT, 0x04FF);
-            
+                 
             measureSum = 0;
             measureCount = 0;
             measureMax = -1;
@@ -235,7 +235,7 @@ void MeasureBodyTemp() {
         }
     }
 
-    if (measuring) {    // Measure body temperature
+    if (measuring) {                                                             // Measure body temperature
         int measurePass = int(millis()) - measureTime;
         
         if (measurePass > BODY_TEMP_MEASURE_BEGIN_MS) {
@@ -243,7 +243,7 @@ void MeasureBodyTemp() {
             measureMax = max(measureMax, measureResult);
             measureMin = min(measureMin, measureResult);
     
-            if (measureMax - measureMin > 0.8) {                                  // Remeasure
+            if (measureMax - measureMin > BODY_TEMP_REMEASURE_THEREHOLD_C) {      // Remeasure
                 measureSum = 0;
                 measureCount = 0;
                 measureMax = -1;
@@ -349,7 +349,6 @@ void ScanCard() {
                 DrawTitle(cardUID, ILI9341_GREEN);
                 
                 tone(SPK_PIN, BEEP_FREQUENCY, CARD_BEEP_MS);
-                delay(5000);
             }
         }
     }
