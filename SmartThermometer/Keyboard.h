@@ -82,6 +82,11 @@ void MakeKB_Button(const char type[][13]) {
         drawButton(10, 205, 54, 30);
         tft.setCursor(15, 229);
         tft.print(F("123"));
+    } else {
+        // 0
+        drawButton(145, 205, 27, 30);
+        tft.setCursor(150, 229);
+        tft.print(F("0"));
     }
 
     // BackSpace
@@ -95,6 +100,12 @@ void MakeKB_Button(const char type[][13]) {
     tft.print(F("OK"));
 }
 
+void CleanKeyboard(bool full) {
+    if (full)
+        tft.fillRoundRect(8, 95, 304, 145, 0, ILI9341_BLACK);
+    else
+        tft.fillRoundRect(8, 95, 304, 110, 0, ILI9341_BLACK);
+}
 
 byte GetKeyPress() {
 
@@ -113,6 +124,11 @@ byte GetKeyPress() {
                 // Special Characters
                 if (TouchButton(10, 205, 54, 30)) {
                     special = !special;
+                }
+            } else {
+                // 0
+                if (TouchButton(145, 205, 27, 30)) {
+                    result = '0';
                 }
             }
 
@@ -159,7 +175,7 @@ byte GetKeyPress() {
 
             if (special != lastSp || shift != lastSh) {
                 if (special || special != lastSp)
-                    tft.fillRoundRect(8, 95, 304, 110, 0, ILI9341_BLACK);
+                    CleanKeyboard(false);
                 if (special) {
                     if (shift) {
                         MakeKB_Button(Mobile_SymKeys);

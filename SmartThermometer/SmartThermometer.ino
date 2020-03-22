@@ -545,7 +545,7 @@ int SendReg(String uid, int num, String name) {
     if (https.begin(*client, SERVER_URL + "/register")) {
 
         https.addHeader("Content-Type", "application/json");
-        String postPayload = "{\"uid\": \"" + uid + "\", \"num\": " + String(num) + ", \"name\": \"" + name + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
+        String postPayload = "{\"UID\": \"" + uid + "\", \"num\": " + String(num) + ", \"name\": \"" + name + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
         Serial.print("[HTTPS] Post: ");
         Serial.println(postPayload);
         int httpCode = https.POST(postPayload);
@@ -586,6 +586,7 @@ void RegScreen() {
                 numpad = true;
                 shift = false;
                 special = false;
+                CleanKeyboard(false);
                 MakeKB_Button(Mobile_NumPad);
                 DrawTitle("Num: ", ILI9341_YELLOW);
                 textBuffer = "";
@@ -594,6 +595,7 @@ void RegScreen() {
                 numpad = false;
                 shift = false;
                 special = false;
+                CleanKeyboard(false);
                 MakeKB_Button(Mobile_KB);
                 DrawTitle("Name: ", ILI9341_BLUE);
                 textBuffer = "";
@@ -616,21 +618,20 @@ void RegScreen() {
                             regStat = 2;
                         }
                         break;
-                    case 2:             // Enter name
-                        if (textBuffer.length() > 0) {          // Send data
-                            regName = textBuffer;
-                            regStat = 0;
-                            DrawTitle("Sending...", ILI9341_ORANGE);
+                    case 2:             // Enter name (Send data)
+                        regName = textBuffer;
+                        regStat = 0;
+                        DrawTitle("Sending...", ILI9341_ORANGE);
 
-                            int res = SendReg(regCardUID, regNum, regName);
-                            if (res != 0) {
-                                DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
-                            } else {
-                                DrawTitle("Sent!", ILI9341_GREEN);
-                            }
-
-                            delay(1000);
+                        int res = SendReg(regCardUID, regNum, regName);
+                        if (res != 0) {
+                            DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
+                        } else {
+                            DrawTitle("Sent!", ILI9341_GREEN);
                         }
+                        CleanKeyboard(true);
+
+                        delay(1000);
                         break;
                 }
                 break;
