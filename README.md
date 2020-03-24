@@ -4,7 +4,7 @@
 - A Variant (with TFT & Touch screen)
 	- With register card support
 	
-- B Variant (LCD screen only)
+- B Variant (LCD screen only) (`#define LCD` for B Variant)
 	- Cheaper, smaller solution
 
 ## Libraries
