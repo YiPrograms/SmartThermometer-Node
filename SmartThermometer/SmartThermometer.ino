@@ -1,218 +1,9 @@
 // LCD Variant
-#define LCD
+//#define LCD
 
 #include <Arduino.h>
 #include "Settings.h"
-
-const uint8_t SD3 = 10;
-
-#include <Wire.h> // I2C (Display, Temperature, Proximity)
-#include <SPI.h> // SPI (Display, Touch, RFID)
-
-// Display
-#ifndef LCD
-// TFT Display
-#include <Adafruit_GFX.h>    // Core graphics library
-#include <Adafruit_ILI9341.h> // Hardware-specific library
-#include <XPT2046_Touchscreen.h>
-#include "GfxUi.h" // Additional UI functions
-
-#define TFT_CS SD3
-#define TFT_DC D4
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
-GfxUi ui = GfxUi(&tft);
-
-// Fonts
-#include "DejaVu_Sans_35.h"
-#include "DejaVu_Sans_Bold_12.h"
-#include "DejaVu_Sans_Bold_23.h"
-#include "Lato_Regular_160.h"
-
-// Touchscreen
-#define TOUCH_CS_PIN D0
-#define TS_MINX 323
-#define TS_MINY 195
-#define TS_MAXX 3947
-#define TS_MAXY 3824
-TS_Point touch_point;
-XPT2046_Touchscreen ts(TOUCH_CS_PIN);
-
-#include "Keyboard.h"
-
-#else
-// LCD Display
-#include <Adafruit_ILI9341.h> // For colors
-#include <LiquidCrystal_I2C.h>
-// Set the LCD address to 0x27 for a 16 chars and 2 line display
-LiquidCrystal_I2C lcd(0x27, 16, 2);
-
-#endif
-
-// Buzzer   
-#define SPK_PIN D8
-
-// WifiManager
-#include <ESP8266WiFi.h>
-#include <DNSServer.h>
-#include <ESP8266WebServer.h>
-#include <WiFiManager.h>
-
-// RFID
-#include <MFRC522.h>
-#define SS_PIN D4
-MFRC522 mfrc522(SS_PIN, -1);
-
-
-// Temperature
-#include <Adafruit_MLX90614.h>
-Adafruit_MLX90614 mlx = Adafruit_MLX90614();
-
-// Proximity
-#include <APDS9930.h>
-APDS9930 apds = APDS9930();
-#define APDS9930_INT    D3
-#define PROX_INT_HIGH   530 // Proximity level for interrupt
-#define PROX_INT_LOW    0  // No far interrupt
-
-// Server
-#include "Credentials.h"
-#include <ESP8266HTTPClient.h>
-#include <WiFiClientSecureBearSSL.h>
-#include <ArduinoJson.h>
-std::unique_ptr<BearSSL::WiFiClientSecure>client(new BearSSL::WiFiClientSecure);
-HTTPClient https;
-StaticJsonDocument<200> doc;
-
-
-void ScreenSetup() {
-
-    pinMode(SPK_PIN, OUTPUT); // Speaker
-
-#ifndef LCD
-    if (!ts.begin()) {
-        Serial.println("TouchSensor not found?");
-    }
-
-    tft.begin();
-    tft.setRotation(3);
-
-    ts.begin();
-#else
-    lcd.begin();
-    lcd.backlight();
-#endif
-}
-
-void RFIDSetup() {
-    SPI.begin();
-    mfrc522.PCD_Init();
-    delay(4);
-    Serial.print("RFID: ");
-    mfrc522.PCD_DumpVersionToSerial();
-}
-
-
-volatile bool promixity = false;
-volatile bool measuring = false;
-volatile bool premeasuring = false;
-
-ICACHE_RAM_ATTR void PromixityInterrupt() {
-    promixity = true;
-}
-
-#ifdef LCD
-void PrintLCD(int row, String text) {
-    int spaces = int(16 - text.length())/2;
-    lcd.setCursor(0, row);
-    
-    for (int i = 0; i < spaces; i++)
-        lcd.print(" ");
-    lcd.print(text);
-    for (int i = 0; i < spaces; i++)
-        lcd.print(" ");
-}
-#endif
-
-void TemperatureSetup() {
-    mlx.begin();
-}
-
-void ProximitySetup() {
-    pinMode(APDS9930_INT, INPUT);
-    attachInterrupt(digitalPinToInterrupt(APDS9930_INT), PromixityInterrupt, FALLING);
-    // Initialize APDS-9930 (configure I2C and initial values)
-    if ( apds.init() ) {
-        Serial.println(F("APDS-9930 initialization complete"));
-    } else {
-        Serial.println(F("Something went wrong during APDS-9930 init!"));
-    }
-
-    // Set proximity interrupt thresholds
-    if ( !apds.setProximityIntLowThreshold(PROX_INT_LOW) ) {
-        Serial.println(F("Error writing low threshold"));
-    }
-    if ( !apds.setProximityIntHighThreshold(PROX_INT_HIGH) ) {
-        Serial.println(F("Error writing high threshold"));
-    }
-
-    // Start running the APDS-9930 proximity sensor (interrupts)
-    if ( apds.enableProximitySensor(true) ) {
-        Serial.println(F("Proximity sensor is now running"));
-    } else {
-        Serial.println(F("Something went wrong during sensor init!"));
-    }
-}
-
-// Called if WiFi has not been configured yet
-void ConfigModeCallback(WiFiManager *myWiFiManager) {
-#ifndef LCD
-    ui.setTextAlignment(CENTER);
-    tft.setFont(&DejaVu_Sans_Bold_12);
-    tft.setTextColor(ILI9341_CYAN);
-    ui.drawString(160, 28, "WiFi Manager");
-    ui.drawString(160, 44, "Please connect to AP");
-    tft.setTextColor(ILI9341_WHITE);
-    ui.drawString(160, 60, myWiFiManager->getConfigPortalSSID());
-    tft.setTextColor(ILI9341_CYAN);
-    ui.drawString(160, 76, "To setup Wifi Configuration");
-#else
-    PrintLCD(0, "AP: " + myWiFiManager->getConfigPortalSSID());
-#endif
-}
-
-void WifiSetup() {
-    WiFiManager ESP_wifiManager;
-    ESP_wifiManager.setDebugOutput(true);
-#ifndef LCD
-    tft.fillScreen(ILI9341_BLACK);
-    tft.setFont(&DejaVu_Sans_Bold_23);
-    ui.setTextColor(ILI9341_CYAN, ILI9341_BLACK);
-    ui.setTextAlignment(CENTER);
-    ui.drawString(160, 120, "Connecting to WiFi...");
-#else
-    PrintLCD(0, "Connecting...   ");
-#endif
-
-    ESP_wifiManager.setAPCallback(ConfigModeCallback);
-
-    ESP_wifiManager.autoConnect();
-
-    Serial.print("WiFi Connected! IP: ");
-    Serial.println(WiFi.localIP());
-#ifndef LCD
-    tft.fillRoundRect(0, 0, 320, 180, 0, ILI9341_BLACK);
-#else
-    lcd.clear();
-#endif
-
-    Serial.println("Request test:");
-    https.begin("http://www.google.com/");
-    Serial.println(https.GET());
-
-    client->setFingerprint(FINGERPRINT);
-}
-
-
+#include "Setup.h"
 
 void setup() {
     Serial.begin(115200);
@@ -228,7 +19,6 @@ void setup() {
 bool regMode = false;
 
 bool initial = true;
-
 
 int lastTrigger = 0;
 
@@ -301,32 +91,34 @@ void DrawRoomTemperature(bool init) {
     tft.fillRoundRect(95, 215, 62, 22, 0, ILI9341_BLACK);
     ui.drawString(125, 235, roomTemp);
 #else
-    if (!measuring && !lastBodyTemp)
-        PrintLCD(1, "Room: " + roomTemp + char(223) + "C");
+    if (premeasuring) {
+        PrintLCD(1, "");
+    } else {
+        if (!measuring && !lastBodyTemp)
+            PrintLCD(1, "Room: " + roomTemp + char(223) + "C");
+    }
 #endif
 }
 
-
-int SendTemperature(int num, double temp) {
-    if (https.begin(*client, SERVER_URL + "/place")) {
-
+int SendPost(String location, String post, String* response = nullptr) {
+    if (https.begin(*client, SERVER_URL + location)) {
         https.addHeader("Content-Type", "application/json");
-        String postPayload = "{\"num\": " + String(num) + ", \"temp\": " + String(temp) + ", \"key\": \"" + PRESHARED_KEY + "\"}";
         Serial.print("[HTTPS] Post: ");
-        Serial.println(postPayload);
-        int httpCode = https.POST(postPayload);
+        Serial.println(post);
+        int httpCode = https.POST(post);
 
         if (httpCode > 0) {
             Serial.printf("[HTTPS] Code: %d\n", httpCode);
             if (httpCode == HTTP_CODE_OK) {
-                return 0;
+                if (response)
+                    *response = https.getString();
             } else {
                 Serial.println("[HTTPS] Server response:");
                 Serial.println(https.getString());
-                return httpCode;
             }
+            return httpCode;
         } else {
-            Serial.printf("[HTTPS] Failed, error: %s\n", https.errorToString(httpCode).c_str());
+            Serial.printf("[HTTPS] Request failed, error: %s\n", https.errorToString(httpCode).c_str());
             return -2;
         }
         https.end();
@@ -334,6 +126,11 @@ int SendTemperature(int num, double temp) {
         Serial.printf("[HTTPS] Unable to connect\n");
         return -1;
     }
+}
+
+int SendTemperature(int num, double temp) {
+    String post = "{\"num\": " + String(num) + ", \"temp\": " + String(temp) + ", \"key\": \"" + PRESHARED_KEY + "\"}";
+    return SendPost("/place", post);
 }
 
 void HandleIRQ() {
@@ -345,6 +142,16 @@ void HandleIRQ() {
             premeasuring = true;
             lastTrigger = millis();
         }
+    }
+}
+
+double FixBodyTemp(double temp) {
+    if (temp < CAL_MID[0]) {
+        double m = (CAL_MID[1] - CAL_LOW[1]) / (CAL_MID[0] - CAL_LOW[0]);
+        return CAL_LOW[1] + (temp - CAL_LOW[0]) * m;
+    } else {
+        double m = (CAL_HIGH[1] - CAL_MID[1]) / (CAL_HIGH[0] - CAL_MID[0]);
+        return CAL_MID[1] + (temp - CAL_MID[0]) * m;
     }
 }
 
@@ -386,17 +193,18 @@ void MeasureBodyTemp() {
             measureMin = min(measureMin, measureResult);
 
             if (measureMax - measureMin > BODY_TEMP_REMEASURE_THEREHOLD_C) {      // Remeasure
-                measureSum = 0;
-                measureCount = 0;
-                measureMax = -1;
-                measureMin = 1e6;
-
                 if (measureRetries > BODY_TEMP_MAX_REMEASURE_TIMES) {            // Measure Failed
                     measuring = false;
                     lastBodyTemp = millis();
                     DrawTitle(MEASURE_FAILED_PROMPT, ILI9341_RED);
-                    tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS * 2);
+                    tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_START_BEEP_MS);
+                    noTone(SPK_PIN);
+                    tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS);
                 } else {
+                    measureSum = 0;
+                    measureCount = 0;
+                    measureMax = -1;
+                    measureMin = 1e6;
                     measureTime = millis() + BODY_TEMP_MEASURE_BEGIN_MS;
                     measureRetries++;
                 }
@@ -409,12 +217,15 @@ void MeasureBodyTemp() {
                         measureTime += BODY_TEMP_MEASURE_BEGIN_MS;
                     else {
                         bodyTemp = measureSum / measureCount;
+                        bodyTemp = FixBodyTemp(bodyTemp);
                         apds.readProximity(proximityData);
                         if (proximityData < PROX_INT_HIGH) {                                       // The person left
                             measuring = false;
                             lastBodyTemp = millis();
                             DrawTitle(MEASURE_LEAVE_PROMPT, ILI9341_RED);
-                            tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS * 2);
+                            tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_START_BEEP_MS);
+                            noTone(SPK_PIN);
+                            tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS);
                         } else {                                                                    // Measure Sucess
                             int color = 0;
 
@@ -432,7 +243,7 @@ void MeasureBodyTemp() {
                                 DrawTitle("Sending as " + String(num) + "...", 0x04FF);
 
                                 int res = SendTemperature(num, bodyTemp);
-                                if (res == 0) {
+                                if (res == HTTP_CODE_OK) {
                                     DrawTitle("Success!", ILI9341_GREEN);
                                 } else {
                                     DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
@@ -476,46 +287,29 @@ void UpdateRoomTemp() {
     }
 }
 
+
+
 int GetInfo(String uid) {
-    if (https.begin(*client, SERVER_URL + "/query")) {
+    String post = "{\"UID\": \"" + uid + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
+    String json;
+    int res = SendPost("/query", post, &json);
 
-        https.addHeader("Content-Type", "application/json");
-        String postPayload = "{\"UID\": \"" + uid + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
-        Serial.print("[HTTPS] Post: ");
-        Serial.println(postPayload);
-        int httpCode = https.POST(postPayload);
+    if (res != HTTP_CODE_OK)
+        return res;
 
-        if (httpCode > 0) {
-            Serial.printf("[HTTPS] Code: %d\n", httpCode);
-            if (httpCode == HTTP_CODE_OK) {
-                String json = https.getString();
-                DeserializationError error = deserializeJson(doc, json);
-                if (error) {
-                    Serial.print(F("deserializeJson() failed: "));
-                    Serial.println(error.c_str());
-                    return -3;
-                }
-                num = doc["Num"];
-                name = doc["Name"];
-                Serial.print("Num:");
-                Serial.print(num);
-                Serial.print(" Name:");
-                Serial.println(name);
-                return 0;
-            } else {
-                Serial.println("[HTTPS] Server response:");
-                Serial.println(https.getString());
-                return httpCode;
-            }
-        } else {
-            Serial.printf("[HTTPS] Failed, error: %s\n", https.errorToString(httpCode).c_str());
-            return -2;
-        }
-        https.end();
-    } else {
-        Serial.printf("[HTTPS] Unable to connect\n");
-        return -1;
+    DeserializationError error = deserializeJson(doc, json);
+    if (error) {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.c_str());
+        return -3;
     }
+    num = doc["Num"];
+    name = doc["Name"];
+    Serial.print("Num:");
+    Serial.print(num);
+    Serial.print(" Name:");
+    Serial.println(name);
+    return 0;
 }
 
 void ScanCard() {
@@ -541,6 +335,7 @@ void ScanCard() {
                 DrawTitle("Searching...", ILI9341_ORANGE);
 
                 int res = GetInfo(cardUID);
+
                 if (res != 0) {
                     DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
                     cardError = true;
@@ -606,32 +401,8 @@ int regNum = -1;
 String regName = "";
 
 int SendReg(String uid, int num, String name) {
-    if (https.begin(*client, SERVER_URL + "/register")) {
-
-        https.addHeader("Content-Type", "application/json");
-        String postPayload = "{\"UID\": \"" + uid + "\", \"num\": " + String(num) + ", \"name\": \"" + name + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
-        Serial.print("[HTTPS] Post: ");
-        Serial.println(postPayload);
-        int httpCode = https.POST(postPayload);
-
-        if (httpCode > 0) {
-            Serial.printf("[HTTPS] Code: %d\n", httpCode);
-            if (httpCode == HTTP_CODE_OK) {
-                return 0;
-            } else {
-                Serial.println("[HTTPS] Server response:");
-                Serial.println(https.getString());
-                return httpCode;
-            }
-        } else {
-            Serial.printf("[HTTPS] Failed, error: %s\n", https.errorToString(httpCode).c_str());
-            return -2;
-        }
-        https.end();
-    } else {
-        Serial.printf("[HTTPS] Unable to connect\n");
-        return -1;
-    }
+    String post = "{\"UID\": \"" + uid + "\", \"num\": " + String(num) + ", \"name\": \"" + name + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
+    return SendPost("/query", post);
 }
 
 void RegScreen() {
@@ -683,8 +454,8 @@ void RegScreen() {
                         } else {
                             DrawTitle("Deregistering...", ILI9341_ORANGE);
                             int res = SendReg(regCardUID, -1, "");
-                            if (res != 0) {
-                                if (res == 406) {
+                            if (res != HTTP_CODE_OK) {
+                                if (res == HTTP_CODE_NOT_ACCEPTABLE) {
                                     DrawTitle("Not registered!", ILI9341_RED);
                                 } else {
                                     DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
@@ -703,7 +474,7 @@ void RegScreen() {
                         DrawTitle("Sending...", ILI9341_ORANGE);
 
                         int res = SendReg(regCardUID, regNum, regName);
-                        if (res != 0) {
+                        if (res != HTTP_CODE_OK) {
                             DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
                         } else {
                             DrawTitle("Sent!", ILI9341_GREEN);

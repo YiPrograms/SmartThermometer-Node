@@ -4,6 +4,10 @@ const int BEEP_FREQUENCY = 1488;
 const int CARD_TIMEOUT_SEC = 8;
 const int CARD_BEEP_MS = 100;
 
+// Temperature Calibaration {Value, Real}
+const double CAL_LOW[] = {33.2, 36.2};
+const double CAL_MID[] = {33.5, 36.5};
+const double CAL_HIGH[] = {33.7, 36.7};
 
 const int BODY_TEMP_MEASURE_START_BEEP_MS = 20;
 const int BODY_TEMP_MEASURE_STOP_BEEP_MS = 600;
@@ -15,7 +19,7 @@ const int BODY_TEMP_MEASURE_BEGIN_MS = 0;
 const int BODY_TEMP_MEASURE_END_MS = 700;
 const int BODY_TEMP_MIN_SAMPLES = 5;  // Keep sampling if there are too few samples
 
-const double BODY_TEMP_REMEASURE_THEREHOLD_C = 0.3; // if MAX - MIN > Therehold then remeasue
+const double BODY_TEMP_REMEASURE_THEREHOLD_C = 0.4; // if MAX - MIN > Therehold then remeasue
 const int BODY_TEMP_MAX_REMEASURE_TIMES = 7;
 
 const int BODY_TEMP_INTERVAL_MS = 1500;
