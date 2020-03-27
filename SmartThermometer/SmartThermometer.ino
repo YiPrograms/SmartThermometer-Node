@@ -197,9 +197,8 @@ void MeasureBodyTemp() {
                     measuring = false;
                     lastBodyTemp = millis();
                     DrawTitle(MEASURE_FAILED_PROMPT, ILI9341_RED);
-                    tone(SPK_PIN, BEEP_FREQUENCY);
-                    delay(BODY_TEMP_MEASURE_START_BEEP_MS);
-                    noTone(SPK_PIN);
+                    tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_START_BEEP_MS*5);
+                    delay(BODY_TEMP_MEASURE_START_BEEP_MS*8);
                     tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS);
                 } else {
                     measureSum = 0;
@@ -224,9 +223,8 @@ void MeasureBodyTemp() {
                             measuring = false;
                             lastBodyTemp = millis();
                             DrawTitle(MEASURE_LEAVE_PROMPT, ILI9341_RED);
-                            tone(SPK_PIN, BEEP_FREQUENCY);
-                            delay(BODY_TEMP_MEASURE_START_BEEP_MS);
-                            noTone(SPK_PIN);
+                            tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_START_BEEP_MS*5);
+                            delay(BODY_TEMP_MEASURE_START_BEEP_MS*8);
                             tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS);
                         } else {                                                                    // Measure Sucess
                             int color = 0;
@@ -393,6 +391,7 @@ void RegScanCard() {
             regCardUID += String(mfrc522.uid.uidByte[i], HEX);
         }
         Serial.println(regCardUID);
+        tone(SPK_PIN, BEEP_FREQUENCY, CARD_BEEP_MS);
         regStat = 1;
     }
 }

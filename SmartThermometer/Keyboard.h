@@ -173,7 +173,7 @@ byte GetKeyPress() {
                 }
             }
 
-            if (special != lastSp || shift != lastSh) {
+            if (!numpad && (special != lastSp || shift != lastSh)) {
                 if (special || special != lastSp)
                     CleanKeyboard(false);
                 if (special) {
