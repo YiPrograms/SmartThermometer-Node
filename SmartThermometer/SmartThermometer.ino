@@ -197,7 +197,8 @@ void MeasureBodyTemp() {
                     measuring = false;
                     lastBodyTemp = millis();
                     DrawTitle(MEASURE_FAILED_PROMPT, ILI9341_RED);
-                    tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_START_BEEP_MS);
+                    tone(SPK_PIN, BEEP_FREQUENCY);
+                    delay(BODY_TEMP_MEASURE_START_BEEP_MS);
                     noTone(SPK_PIN);
                     tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS);
                 } else {
@@ -223,7 +224,8 @@ void MeasureBodyTemp() {
                             measuring = false;
                             lastBodyTemp = millis();
                             DrawTitle(MEASURE_LEAVE_PROMPT, ILI9341_RED);
-                            tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_START_BEEP_MS);
+                            tone(SPK_PIN, BEEP_FREQUENCY);
+                            delay(BODY_TEMP_MEASURE_START_BEEP_MS);
                             noTone(SPK_PIN);
                             tone(SPK_PIN, BEEP_FREQUENCY, BODY_TEMP_MEASURE_STOP_BEEP_MS);
                         } else {                                                                    // Measure Sucess
@@ -402,7 +404,7 @@ String regName = "";
 
 int SendReg(String uid, int num, String name) {
     String post = "{\"UID\": \"" + uid + "\", \"num\": " + String(num) + ", \"name\": \"" + name + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
-    return SendPost("/query", post);
+    return SendPost("/register", post);
 }
 
 void RegScreen() {
