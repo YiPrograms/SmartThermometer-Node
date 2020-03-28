@@ -129,7 +129,12 @@ int SendPost(String location, String post, String* response = nullptr) {
 }
 
 int SendTemperature(int num, double temp) {
-    String post = "{\"num\": " + String(num) + ", \"temp\": " + String(temp) + ", \"key\": \"" + PRESHARED_KEY + "\"}";
+    StaticJsonDocument<200> doc;
+    doc["num"] = num;
+    doc["temp"] = temp;
+    doc["key"] = PRESHARED_KEY;
+    String post = "";
+    serializeJson(doc, post);
     return SendPost("/place", post);
 }
 
@@ -243,7 +248,7 @@ void MeasureBodyTemp() {
                                 DrawTitle("Sending as " + String(num) + "...", 0x04FF);
 
                                 int res = SendTemperature(num, bodyTemp);
-                                if (res == HTTP_CODE_OK) {
+                                if (res == HTTP_CODE_ACCEPTED) {
                                     DrawTitle("Success!", ILI9341_GREEN);
                                 } else {
                                     DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
@@ -290,13 +295,18 @@ void UpdateRoomTemp() {
 
 
 int GetInfo(String uid) {
-    String post = "{\"UID\": \"" + uid + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
+    StaticJsonDocument<200> doc;
+    doc["UID"] = uid;
+    doc["key"] = PRESHARED_KEY;
+    String post = "";
+    serializeJson(doc, post);
     String json;
     int res = SendPost("/query", post, &json);
 
     if (res != HTTP_CODE_OK)
         return res;
 
+    doc.clear();
     DeserializationError error = deserializeJson(doc, json);
     if (error) {
         Serial.print(F("deserializeJson() failed: "));
@@ -337,14 +347,15 @@ void ScanCard() {
                 int res = GetInfo(cardUID);
 
                 if (res != 0) {
-                    DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
-                    cardError = true;
-                } else if (num == -1) {
+                    if (res == HTTP_CODE_UNPROCESSABLE_ENTITY) {
 #ifndef LCD
-                    DrawTitle("No Entry Found :(", ILI9341_RED);
+                        DrawTitle("No Entry Found :(", ILI9341_RED);
 #else
-                    DrawTitle("No Entry Found", ILI9341_RED);
+                        DrawTitle("No Entry Found", ILI9341_RED);
 #endif
+                    } else {
+                        DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
+                    }
                     cardError = true;
                 } else {
                     if (strlen(name)) {
@@ -402,8 +413,23 @@ int regNum = -1;
 String regName = "";
 
 int SendReg(String uid, int num, String name) {
-    String post = "{\"UID\": \"" + uid + "\", \"num\": " + String(num) + ", \"name\": \"" + name + "\", \"key\": \"" + PRESHARED_KEY + "\"}";
+    StaticJsonDocument<200> doc;
+    doc["uid"] = uid;
+    doc["num"] = num;
+    doc["name"] = name;
+    doc["key"] = PRESHARED_KEY;
+    String post = "";
+    serializeJson(doc, post);
     return SendPost("/register", post);
+}
+
+int DeReg(String uid) {
+    StaticJsonDocument<200> doc;
+    doc["uid"] = uid;
+    doc["key"] = PRESHARED_KEY;
+    String post = "";
+    serializeJson(doc, post);
+    return SendPost("/deregister", post);
 }
 
 void RegScreen() {
@@ -454,9 +480,9 @@ void RegScreen() {
                             regStat = 2;
                         } else {
                             DrawTitle("Deregistering...", ILI9341_ORANGE);
-                            int res = SendReg(regCardUID, -1, "");
+                            int res = DeReg(regCardUID);
                             if (res != HTTP_CODE_OK) {
-                                if (res == HTTP_CODE_NOT_ACCEPTABLE) {
+                                if (res == HTTP_CODE_UNPROCESSABLE_ENTITY) {
                                     DrawTitle("Not registered!", ILI9341_RED);
                                 } else {
                                     DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
@@ -472,13 +498,13 @@ void RegScreen() {
                     case 2:             // Enter name (Send data)
                         regName = textBuffer;
                         regStat = 0;
-                        DrawTitle("Sending...", ILI9341_ORANGE);
+                        DrawTitle("Sending Info...", ILI9341_ORANGE);
 
                         int res = SendReg(regCardUID, regNum, regName);
                         if (res != HTTP_CODE_OK) {
                             DrawTitle("Error " + String(res) + " :(", ILI9341_RED);
                         } else {
-                            DrawTitle("Sent!", ILI9341_GREEN);
+                            DrawTitle("Success!", ILI9341_GREEN);
                         }
                         CleanKeyboard(true);
 

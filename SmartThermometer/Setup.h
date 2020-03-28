@@ -75,7 +75,7 @@ APDS9930 apds = APDS9930();
 #include <ArduinoJson.h>
 std::unique_ptr<BearSSL::WiFiClientSecure>client(new BearSSL::WiFiClientSecure);
 HTTPClient https;
-StaticJsonDocument<200> doc;
+
 
 
 void ScreenSetup() {
