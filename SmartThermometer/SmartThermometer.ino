@@ -162,7 +162,10 @@ double FixBodyTemp(double temp) {
 
 void MeasureBodyTemp() {
     //Serial.print("Object Temp: ");
-    //Serial.println(mlx.readObjectTempC());
+    //Serial.println(mlx.readObjectTempC())
+    //apds.readProximity(proximityData);
+    //Serial.print("Proximity: ");
+    //Serial.println(proximityData);
 
     if (premeasuring) {
         apds.readProximity(proximityData);

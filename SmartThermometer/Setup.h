@@ -65,7 +65,7 @@ Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 #include <APDS9930.h>
 APDS9930 apds = APDS9930();
 #define APDS9930_INT    D3
-#define PROX_INT_HIGH   530 // Proximity level for interrupt
+#define PROX_INT_HIGH   160 // Proximity level for interrupt
 #define PROX_INT_LOW    0  // No far interrupt
 
 // Server
