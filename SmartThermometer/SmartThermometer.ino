@@ -1,9 +1,13 @@
 // LCD Variant
-//#define LCD
+#define LCD
 
 #include <Arduino.h>
 #include "Settings.h"
 #include "Setup.h"
+
+#ifdef LCD
+#define tone(pin, freq, ms) digitalWrite(pin, HIGH);delay(ms);digitalWrite(pin, LOW)
+#endif
 
 void setup() {
     Serial.begin(115200);
