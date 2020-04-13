@@ -1,5 +1,9 @@
 # Smart Therometer NodeMCU Client
 
+### This is the client software that runs on NodeMCU<br>For the server, look at [this repo](https://github.com/YiPrograms/SmartThermometer-Server)
+
+![Block Diagram](https://i.imgur.com/8c5KQPW.png)
+
 ## Variants
 - A Variant (with TFT & Touch screen)
 	- With register card support
@@ -35,6 +39,7 @@
 - Screen:
 	- A Variant: ILI9341 2.4' TFT with XPT2046 touch screen
 	- B Variant: LCD1602A with I2C adapter board
+	
 
 ## Pins
 
